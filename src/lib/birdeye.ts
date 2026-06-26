@@ -168,8 +168,8 @@ export async function getTokenOHLCV(address: string, type: string = "15m"): Prom
 }
 
 export interface BirdeyeTrade {
-  quote: { symbol: string; amount: string; uiAmount: number };
-  base: { symbol: string; amount: string; uiAmount: number };
+  quote: { symbol: string; amount: string; uiAmount: number; address: string };
+  base: { symbol: string; amount: string; uiAmount: number; address: string };
   basePrice: number;
   quotePrice: number;
   txHash: string;
