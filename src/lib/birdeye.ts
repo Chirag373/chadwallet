@@ -17,6 +17,7 @@ export interface BirdeyeTokenOverview extends BirdeyeToken {
   priceChange24hPercent: number;
   v24h: number;
   mc: number;
+  supply?: number;
 }
 
 export interface SearchResult {
