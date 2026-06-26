@@ -1,19 +1,31 @@
 {
-  "name": "pencheng",
+  "name": "chadwallet",
   "version": "0.1.0",
   "private": true,
   "scripts": {
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "eslint"
+    "lint": "eslint",
+    "pages:build": "npx @opennextjs/cloudflare build"
   },
   "dependencies": {
+    "@heroicons/react": "^2.2.0",
+    "@jup-ag/api": "^6.0.48",
+    "@privy-io/react-auth": "^3.32.2",
+    "@solana/web3.js": "^1.98.4",
+    "@supabase/supabase-js": "^2.108.2",
+    "bs58": "^6.0.0",
+    "framer-motion": "^12.42.0",
+    "lightweight-charts": "^5.2.0",
+    "lucide-react": "^1.21.0",
     "next": "16.2.9",
     "react": "19.2.4",
-    "react-dom": "19.2.4"
+    "react-dom": "19.2.4",
+    "react-icons": "^5.6.0"
   },
   "devDependencies": {
+    "@opennextjs/cloudflare": "^1.20.1",
     "@tailwindcss/postcss": "^4",
     "@types/node": "^20",
     "@types/react": "^19",
@@ -21,6 +33,7 @@
     "eslint": "^9",
     "eslint-config-next": "16.2.9",
     "tailwindcss": "^4",
-    "typescript": "^5"
+    "typescript": "^5",
+    "wrangler": "^4.105.0"
   }
 }
