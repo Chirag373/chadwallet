@@ -67,7 +67,7 @@ export function TradePanel({ tokenAddress, tokenSymbol, tokenName, tokenPrice }:
   const depositMenuRef = useRef<HTMLDivElement>(null);
 
   const hasEmbeddedWallet = !!user?.linkedAccounts.some(
-    (a) => a.type === "wallet" && (a as any).walletClientType === "privy"
+    (a) => a.type === "wallet" && "walletClientType" in a && a.walletClientType === "privy"
   );
 
   useEffect(() => {
