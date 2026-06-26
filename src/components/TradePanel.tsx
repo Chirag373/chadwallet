@@ -2,7 +2,7 @@
 
 import { FormEvent, useEffect, useMemo, useRef, useState } from "react";
 import { usePrivy, useWallets } from "@privy-io/react-auth";
-import { useFundWallet } from "@privy-io/react-auth/solana";
+import { useFundWallet, useSignAndSendTransaction } from "@privy-io/react-auth/solana";
 import { Connection, LAMPORTS_PER_SOL, PublicKey, VersionedTransaction } from "@solana/web3.js";
 import { supabase } from "@/lib/supabase";
 import {
@@ -57,6 +57,7 @@ export function TradePanel({ tokenAddress, tokenSymbol, tokenName, tokenPrice }:
   const { authenticated, login, user, exportWallet } = usePrivy();
   const { wallets } = useWallets();
   const { fundWallet } = useFundWallet();
+  const { signAndSendTransaction } = useSignAndSendTransaction();
   const [mode, setMode] = useState<TradeMode>("buy");
   const [amount, setAmount] = useState("");
   const [slippage, setSlippage] = useState("1");
@@ -265,12 +266,13 @@ export function TradePanel({ tokenAddress, tokenSymbol, tokenName, tokenPrice }:
         const swapTransactionBuf = Buffer.from(swapData.swapTransaction, "base64");
         const _transaction = VersionedTransaction.deserialize(swapTransactionBuf);
         
-        const rpcUrl = process.env.NEXT_PUBLIC_ALCHEMY_RPC_URL || "https://api.mainnet-beta.solana.com";
-        const _connection = new Connection(rpcUrl);
-        
-        // Use Privy's wallet object to sign and send (depending on Privy's Solana provider API)
-        // If using useSolanaWallets hook, it provides standard Solana wallet adapter methods.
-        // For production, refer strictly to Privy Solana SDK docs for `sendTransaction`.
+        // Broadcast the transaction to Solana using the embedded wallet
+        const { signature } = await signAndSendTransaction({
+          transaction: _transaction.serialize(),
+          // @ts-expect-error Privy wallet compatibility
+          wallet: wallet,
+        });
+
         setStatus("Transaction sent! Saving trade...");
         
         // Upsert user in Supabase

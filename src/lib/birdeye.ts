@@ -165,3 +165,53 @@ export async function getTokenOHLCV(address: string, type: string = "15m"): Prom
     return [];
   }
 }
+
+export interface BirdeyeTrade {
+  quote: { symbol: string; amount: string; uiAmount: number };
+  base: { symbol: string; amount: string; uiAmount: number };
+  basePrice: number;
+  quotePrice: number;
+  txHash: string;
+  source: string;
+  blockUnixTime: number;
+  txType: "swap" | string;
+  owner: string;
+  side: "buy" | "sell";
+}
+
+export async function getTokenTrades(address: string, limit: number = 20): Promise<BirdeyeTrade[]> {
+  try {
+    const json = await fetchBirdeyeJson<{ items?: BirdeyeTrade[] }>(
+      `https://public-api.birdeye.so/defi/txs/token?address=${address}&offset=0&limit=${limit}&tx_type=swap`,
+      { cache: "no-store" }
+    );
+    if (!json.success || !json.data?.items) return [];
+    return json.data.items;
+  } catch (err) {
+    console.error("Error fetching trades:", err);
+    return [];
+  }
+}
+
+export interface BirdeyeHolder {
+  amount: string;
+  decimals: number;
+  mint: string;
+  owner: string;
+  token_account: string;
+  ui_amount: number;
+}
+
+export async function getTokenHolders(address: string, limit: number = 20): Promise<BirdeyeHolder[]> {
+  try {
+    const json = await fetchBirdeyeJson<{ items?: BirdeyeHolder[] }>(
+      `https://public-api.birdeye.so/defi/v3/token/holder?address=${address}&offset=0&limit=${limit}`,
+      { next: { revalidate: 60 } }
+    );
+    if (!json.success || !json.data?.items) return [];
+    return json.data.items;
+  } catch (err) {
+    console.error("Error fetching holders:", err);
+    return [];
+  }
+}

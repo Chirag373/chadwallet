@@ -3,10 +3,17 @@
 import { useEffect, useState } from "react";
 import { Users } from "lucide-react";
 
+import { getTokenHolders, getTokenOverview } from "@/lib/birdeye";
+
 interface Holder {
   owner: string;
   amount: number;
   percentage: number;
+}
+
+function shortenAddress(addr: string) {
+  if (addr.length < 10) return addr;
+  return `${addr.slice(0, 4)}...${addr.slice(-4)}`;
 }
 
 export function HoldersList({ mint }: { mint: string }) {
@@ -16,25 +23,21 @@ export function HoldersList({ mint }: { mint: string }) {
   useEffect(() => {
     async function fetchHolders() {
       try {
-        const apiKey = process.env.NEXT_PUBLIC_BIRDEYE_API_KEY;
-        if (!apiKey) {
-          // Dummy fallback
-          setHolders([
-            { owner: "7A9...3Kx", amount: 1500000, percentage: 15.0 },
-            { owner: "B4x...9zL", amount: 800000, percentage: 8.0 },
-            { owner: "Raydium Pool", amount: 500000, percentage: 5.0 },
-          ]);
-          setLoading(false);
-          return;
-        }
-
-        // Normally we'd call BirdEye API for top holders here.
-        // For demonstration without exact endpoint, we use dummy data.
-        setHolders([
-          { owner: "7A9...3Kx", amount: 1500000, percentage: 15.0 },
-          { owner: "B4x...9zL", amount: 800000, percentage: 8.0 },
-          { owner: "Raydium Pool", amount: 500000, percentage: 5.0 },
+        const [holdersData, overview] = await Promise.all([
+          getTokenHolders(mint, 10),
+          getTokenOverview(mint),
         ]);
+
+        if (holdersData && holdersData.length > 0) {
+          const totalSupply = overview?.supply || 1; // Avoid div by 0
+
+          const formatted = holdersData.map((h) => ({
+            owner: shortenAddress(h.owner),
+            amount: h.ui_amount,
+            percentage: (h.ui_amount / totalSupply) * 100,
+          }));
+          setHolders(formatted);
+        }
         setLoading(false);
       } catch (err) {
         console.error(err);

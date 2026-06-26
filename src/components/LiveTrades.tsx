@@ -3,12 +3,24 @@
 import { useEffect, useState } from "react";
 import { Activity } from "lucide-react";
 
+import { getTokenTrades } from "@/lib/birdeye";
+
 interface Trade {
   id: string;
   type: "buy" | "sell";
   priceUsd: number;
   amount: number;
   time: string;
+}
+
+function formatTimeAgo(unixMs: number) {
+  const seconds = Math.floor((Date.now() - unixMs) / 1000);
+  if (seconds < 60) return `${seconds}s ago`;
+  const minutes = Math.floor(seconds / 60);
+  if (minutes < 60) return `${minutes}m ago`;
+  const hours = Math.floor(minutes / 60);
+  if (hours < 24) return `${hours}h ago`;
+  return `${Math.floor(hours / 24)}d ago`;
 }
 
 export function LiveTrades({ mint }: { mint: string }) {
@@ -18,23 +30,19 @@ export function LiveTrades({ mint }: { mint: string }) {
   useEffect(() => {
     async function fetchTrades() {
       try {
-        const apiKey = process.env.NEXT_PUBLIC_BIRDEYE_API_KEY;
-        if (!apiKey) {
-          setTrades([
-            { id: "1", type: "buy", priceUsd: 0.14, amount: 2500, time: "10s ago" },
-            { id: "2", type: "sell", priceUsd: 0.14, amount: 100, time: "45s ago" },
-            { id: "3", type: "buy", priceUsd: 0.138, amount: 5000, time: "1m ago" },
-          ]);
-          setLoading(false);
-          return;
+        const data = await getTokenTrades(mint, 15);
+        if (data && data.length > 0) {
+          const formatted = data.map((t) => ({
+            id: t.txHash,
+            type: t.side,
+            priceUsd: t.quotePrice,
+            // For a buy/sell on Solana token, amount is usually base uiAmount or quote uiAmount depending on side
+            // We use base.uiAmount if base address matches mint, otherwise quote
+            amount: t.base.address === mint ? t.base.uiAmount : t.quote.uiAmount,
+            time: formatTimeAgo(t.blockUnixTime * 1000)
+          }));
+          setTrades(formatted);
         }
-
-        // Mocking real-time updates for now
-        setTrades([
-          { id: "1", type: "buy", priceUsd: 0.14, amount: 2500, time: "10s ago" },
-          { id: "2", type: "sell", priceUsd: 0.14, amount: 100, time: "45s ago" },
-          { id: "3", type: "buy", priceUsd: 0.138, amount: 5000, time: "1m ago" },
-        ]);
         setLoading(false);
       } catch (err) {
         console.error(err);
@@ -42,6 +50,8 @@ export function LiveTrades({ mint }: { mint: string }) {
       }
     }
     fetchTrades();
+    const interval = setInterval(fetchTrades, 15000); // refresh every 15s
+    return () => clearInterval(interval);
   }, [mint]);
 
   return (
