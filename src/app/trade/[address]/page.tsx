@@ -45,12 +45,12 @@ export default async function TradePage({ params }: { params: Promise<{ address:
   const isPositive = (val: number | undefined | null) => (val || 0) >= 0;
 
   return (
-    <main className="min-h-screen text-white flex flex-col" style={{ background: "var(--bg-primary)" }}>
+    <main className="h-[100dvh] overflow-hidden text-white flex flex-col" style={{ background: "var(--bg-primary)" }}>
       <Navbar />
       
-      <div className="flex-1 mt-[72px] p-4 flex flex-col lg:flex-row gap-4 min-h-[calc(100vh-72px)] lg:h-[calc(100vh-72px)]">
+      <div className="mt-[64px] p-4 flex flex-col lg:flex-row gap-4 h-[calc(100dvh-64px)] w-full">
         {/* Left Panel: Trending Tokens */}
-        <aside className="w-[320px] rounded-[24px] border border-white/5 p-4 flex-col hidden lg:flex glass-card shadow-2xl">
+        <aside className="w-[320px] h-full min-h-0 rounded-[24px] border border-white/5 p-4 flex-col hidden lg:flex glass-card shadow-2xl">
           <h2 className="font-bold text-lg mb-4 tracking-tight px-2" style={{ color: "var(--text-primary)" }}>🔥 Trending</h2>
           <div className="flex-1 overflow-y-auto space-y-1 custom-scrollbar pr-2">
             {trendingTokens.map((t) => (
@@ -82,7 +82,7 @@ export default async function TradePage({ params }: { params: Promise<{ address:
         </aside>
 
         {/* Middle Panel: Chart & Info */}
-        <div className="w-full flex-1 flex flex-col gap-4 min-w-0 min-h-[560px] lg:min-h-0">
+        <div className="w-full flex-1 flex flex-col gap-4 min-w-0 min-h-0">
           <div className="glass-card rounded-[24px] border border-white/5 p-4 sm:p-5 flex flex-col sm:flex-row sm:items-center justify-between gap-4 shadow-xl">
             <div className="flex items-center gap-4 min-w-0">
               <TokenAvatar
@@ -123,7 +123,7 @@ export default async function TradePage({ params }: { params: Promise<{ address:
         </div>
 
         {/* Right Panel: Buy/Sell */}
-        <aside className="w-full lg:w-[360px] flex shrink-0 flex-col gap-4 overflow-y-auto custom-scrollbar pr-2 pb-4">
+        <aside className="w-full lg:w-[360px] h-full min-h-0 flex shrink-0 flex-col gap-4 overflow-y-auto custom-scrollbar pr-2 pb-4">
           <TradePanel
             tokenAddress={address}
             tokenSymbol={tokenOverview?.symbol}

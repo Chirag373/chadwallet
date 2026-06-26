@@ -76,7 +76,7 @@ export function ChartSection({ address, initialData, initialInterval = "15m" }: 
   };
 
   return (
-    <div className="flex-1 min-h-[420px] glass-card rounded-[24px] border border-white/5 p-4 overflow-hidden relative shadow-xl flex flex-col" data-chart-section>
+    <div className="flex-1 min-h-[200px] glass-card rounded-[24px] border border-white/5 p-4 overflow-hidden relative shadow-xl flex flex-col" data-chart-section>
       <div className="mb-3 flex flex-wrap items-center justify-between gap-2 px-1">
         <div className="flex items-center gap-1">
           {INTERVALS.map((interval) => (

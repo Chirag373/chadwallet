@@ -4,7 +4,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import Image from "next/image";
 import { usePrivy } from "@privy-io/react-auth";
-import { ChevronDown, LayoutDashboard, LogOut, UserRound } from "lucide-react";
+import { ChevronDown, LayoutDashboard, LogOut, Settings, UserRound } from "lucide-react";
 
 import { TokenSearch } from "./TokenSearch";
 
@@ -21,10 +21,10 @@ export function Navbar() {
   const accountMenuRef = useRef<HTMLDivElement>(null);
 
   const accountLabel = useMemo(() => {
-    const email = user?.email?.address;
+    const email = user?.email?.address || user?.google?.email || user?.apple?.email;
     const wallet = user?.wallet?.address;
-    return shortenAccount(email || wallet || "Account");
-  }, [user?.email?.address, user?.wallet?.address]);
+    return shortenAccount(email || wallet || "Not connected");
+  }, [user]);
 
   useEffect(() => {
     function handlePointerDown(event: MouseEvent) {
@@ -117,13 +117,22 @@ export function Navbar() {
                 className="absolute right-0 top-full mt-2 w-52 overflow-hidden rounded-2xl border border-white/10 bg-[#15141f] shadow-[0_24px_60px_rgba(0,0,0,0.55)]"
               >
                 <Link
-                  href="/dashboard"
+                  href="/trade/So11111111111111111111111111111111111111112"
                   role="menuitem"
                   onClick={() => setIsAccountOpen(false)}
                   className="flex items-center gap-3 px-4 py-3 text-sm font-bold text-white transition-colors hover:bg-white/[0.07]"
                 >
                   <LayoutDashboard className="w-4 h-4 text-accent-primary" aria-hidden="true" />
                   Dashboard
+                </Link>
+                <Link
+                  href="/dashboard"
+                  role="menuitem"
+                  onClick={() => setIsAccountOpen(false)}
+                  className="flex items-center gap-3 px-4 py-3 text-sm font-bold text-white transition-colors hover:bg-white/[0.07]"
+                >
+                  <Settings className="w-4 h-4 text-accent-primary" aria-hidden="true" />
+                  Manage Account
                 </Link>
                 <button
                   type="button"

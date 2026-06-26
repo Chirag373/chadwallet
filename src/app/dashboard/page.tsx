@@ -3,15 +3,18 @@
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 import { usePrivy } from "@privy-io/react-auth";
+import { getSolanaAddress } from "@/lib/solana-wallet";
 import { Connection, PublicKey, LAMPORTS_PER_SOL } from "@solana/web3.js";
 import { supabase } from "@/lib/supabase";
 import {
+  Activity,
   ArrowRight,
   Bell,
   ChartCandlestick,
   LayoutDashboard,
   LogIn,
   Search,
+  Settings,
   ShieldCheck,
   Wallet,
 } from "lucide-react";
@@ -31,18 +34,25 @@ const actions = [
 ];
 
 export default function DashboardPage() {
-  const { authenticated, login, user } = usePrivy();
+  const { authenticated, login, user, linkWallet } = usePrivy();
   const [solBalance, setSolBalance] = useState<number | null>(null);
   const [openPositions, setOpenPositions] = useState(0);
   const [recentTrades, setRecentTrades] = useState(0);
 
+  const solanaAddress = user ? getSolanaAddress(user) : null;
+
   const accountLabel = useMemo(() => {
-    return shortenAccount(user?.email?.address || user?.wallet?.address || "Not connected");
-  }, [user?.email?.address, user?.wallet?.address]);
+    const email = user?.email?.address || user?.google?.email || user?.apple?.email;
+    return shortenAccount(solanaAddress || email || "Not connected");
+  }, [user, solanaAddress]);
 
   useEffect(() => {
     async function fetchBalance() {
       if (!user?.wallet?.address) {
+        setSolBalance(0);
+        return;
+      }
+      if (user.wallet.address.startsWith("0x")) {
         setSolBalance(0);
         return;
       }
@@ -62,17 +72,26 @@ export default function DashboardPage() {
   // Fetch open positions and trade count from Supabase
   useEffect(() => {
     async function fetchSupabaseData() {
-      if (!user?.wallet?.address) {
+      if (!user?.id) {
         setOpenPositions(0);
         setRecentTrades(0);
         return;
       }
       try {
+        // First resolve the Supabase UUID from privy_id
+        const { data: dbUser } = await supabase
+          .from("users")
+          .select("id")
+          .eq("privy_id", user.id)
+          .single();
+
+        if (!dbUser) return;
+
         // Count positions with balance > 0
         const { data: positions } = await supabase
           .from("positions")
           .select("id")
-          .eq("wallet_address", user.wallet.address)
+          .eq("user_id", dbUser.id)
           .gt("balance", 0);
         setOpenPositions(positions?.length ?? 0);
 
@@ -82,7 +101,7 @@ export default function DashboardPage() {
         const { count } = await supabase
           .from("trades")
           .select("id", { count: "exact", head: true })
-          .eq("wallet_address", user.wallet.address)
+          .eq("user_id", dbUser.id)
           .gte("created_at", weekAgo.toISOString());
         setRecentTrades(count ?? 0);
       } catch (err) {
@@ -90,7 +109,7 @@ export default function DashboardPage() {
       }
     }
     fetchSupabaseData();
-  }, [user?.wallet?.address]);
+  }, [user?.id]);
 
   return (
     <main className="min-h-screen text-white" style={{ background: "var(--bg-primary)" }}>
@@ -100,12 +119,12 @@ export default function DashboardPage() {
         <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
           <div>
             <div className="mb-3 inline-flex items-center gap-2 rounded-full border border-white/10 bg-white/[0.04] px-3 py-1.5 text-xs font-bold uppercase tracking-widest text-accent-primary">
-              <LayoutDashboard className="h-4 w-4" aria-hidden="true" />
-              Dashboard
+              <Settings className="h-4 w-4" aria-hidden="true" />
+              Manage Account
             </div>
-            <h1 className="text-3xl font-black tracking-tight sm:text-5xl">Your trading cockpit</h1>
+            <h1 className="text-3xl font-black tracking-tight sm:text-5xl">Account Settings</h1>
             <p className="mt-3 max-w-2xl text-sm font-medium leading-6" style={{ color: "var(--text-secondary)" }}>
-              Track account status, jump back into live charts, and manage your trading activity.
+              Manage your linked wallets, security settings, and track your active trading portfolio.
             </p>
           </div>
 
@@ -134,9 +153,27 @@ export default function DashboardPage() {
                   <div className="mt-1 text-lg font-black">{accountLabel}</div>
                 </div>
               </div>
-              <div className="inline-flex w-fit items-center gap-2 rounded-full border border-emerald-400/20 bg-emerald-400/10 px-3 py-1.5 text-sm font-bold text-emerald-300">
-                <ShieldCheck className="h-4 w-4" aria-hidden="true" />
-                {authenticated ? "Connected" : "Login required"}
+              <div className="flex items-center gap-3 flex-wrap">
+                <div className="inline-flex w-fit items-center gap-2 rounded-full border border-emerald-400/20 bg-emerald-400/10 px-3 py-1.5 text-sm font-bold text-emerald-300">
+                  <ShieldCheck className="h-4 w-4" aria-hidden="true" />
+                  {authenticated ? "Connected" : "Login required"}
+                </div>
+                {authenticated && !solanaAddress && (
+                  <button
+                    type="button"
+                    onClick={() => linkWallet({ walletChainType: 'solana-only' })}
+                    className="inline-flex w-fit items-center gap-2 rounded-full border border-white/10 bg-white/[0.04] px-3 py-1.5 text-sm font-bold text-white transition-colors hover:bg-white/10"
+                  >
+                    <Wallet className="h-4 w-4" aria-hidden="true" />
+                    Connect Solana
+                  </button>
+                )}
+                {authenticated && solanaAddress && (
+                  <div className="inline-flex w-fit items-center gap-2 rounded-full border border-emerald-400/20 bg-emerald-400/10 px-3 py-1.5 text-sm font-bold text-emerald-300">
+                    <Wallet className="h-4 w-4" aria-hidden="true" />
+                    Wallet Linked
+                  </div>
+                )}
               </div>
             </div>
 
@@ -183,6 +220,15 @@ export default function DashboardPage() {
             </div>
           </section>
         </div>
+
+        <section className="mt-6 glass-card rounded-[24px] border border-white/5 p-5 shadow-xl">
+          <h2 className="text-lg font-black tracking-tight">Recent Activity</h2>
+          <div className="mt-8 flex flex-col items-center justify-center py-16 opacity-50">
+            <Activity className="h-10 w-10 text-zinc-500 mb-4" aria-hidden="true" />
+            <p className="text-sm font-bold text-white">No recent transactions found</p>
+            <p className="text-xs mt-1 text-zinc-400">Your latest trades and transfers will appear here.</p>
+          </div>
+        </section>
 
       </section>
     </main>

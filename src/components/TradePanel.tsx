@@ -1,7 +1,8 @@
 "use client";
 
-import { FormEvent, useEffect, useMemo, useState } from "react";
+import { FormEvent, useEffect, useMemo, useRef, useState } from "react";
 import { usePrivy, useWallets } from "@privy-io/react-auth";
+import { useFundWallet } from "@privy-io/react-auth/solana";
 import { Connection, LAMPORTS_PER_SOL, PublicKey, VersionedTransaction } from "@solana/web3.js";
 import { supabase } from "@/lib/supabase";
 import {
@@ -53,20 +54,48 @@ function formatUsd(value: number) {
 }
 
 export function TradePanel({ tokenAddress, tokenSymbol, tokenName, tokenPrice }: TradePanelProps) {
-  const { authenticated, login, user } = usePrivy();
+  const { authenticated, login, user, exportWallet } = usePrivy();
   const { wallets } = useWallets();
+  const { fundWallet } = useFundWallet();
   const [mode, setMode] = useState<TradeMode>("buy");
   const [amount, setAmount] = useState("");
   const [slippage, setSlippage] = useState("1");
   const [status, setStatus] = useState<string | null>(null);
   const [isExecuting, setIsExecuting] = useState(false);
   const [walletBalance, setWalletBalance] = useState<string | null>(null);
+  const [isDepositOpen, setIsDepositOpen] = useState(false);
+  const depositMenuRef = useRef<HTMLDivElement>(null);
+
+  const hasEmbeddedWallet = !!user?.linkedAccounts.some(
+    (a) => a.type === "wallet" && (a as any).walletClientType === "privy"
+  );
+
+  useEffect(() => {
+    function handlePointerDown(event: MouseEvent) {
+      if (depositMenuRef.current && !depositMenuRef.current.contains(event.target as Node)) {
+        setIsDepositOpen(false);
+      }
+    }
+    document.addEventListener("mousedown", handlePointerDown);
+    return () => {
+      document.removeEventListener("mousedown", handlePointerDown);
+    };
+  }, []);
+
+  const parsedBalance = useMemo(() => {
+    if (!walletBalance) return 0;
+    const numStr = walletBalance.split(" ")[0].replace(/,/g, "");
+    const num = Number(numStr);
+    return isNaN(num) ? 0 : num;
+  }, [walletBalance]);
 
   const symbol = tokenSymbol || "TOKEN";
   const price = tokenPrice || 0;
   const numericAmount = parseAmount(amount);
   const sourceSymbol = mode === "buy" ? "USDC" : symbol;
   const targetSymbol = mode === "buy" ? symbol : "USDC";
+
+  const hasInsufficientBalance = authenticated && numericAmount > parsedBalance;
 
   // Fetch user's wallet balance (SOL when selling, USDC when buying)
   const walletAddress = user?.wallet?.address ?? null;
@@ -77,6 +106,12 @@ export function TradePanel({ tokenAddress, tokenSymbol, tokenName, tokenPrice }:
     let cancelled = false;
 
     async function fetchBalance() {
+      if (walletAddress!.startsWith("0x")) {
+        if (!cancelled) {
+           setWalletBalance(mode === "buy" ? "0 USDC" : `0 ${symbol}`);
+        }
+        return;
+      }
       try {
         const rpcUrl = process.env.NEXT_PUBLIC_ALCHEMY_RPC_URL || "https://api.mainnet-beta.solana.com";
         const connection = new Connection(rpcUrl);
@@ -163,7 +198,7 @@ export function TradePanel({ tokenAddress, tokenSymbol, tokenName, tokenPrice }:
   }, [numericAmount, mode, tokenAddress, slippage]);
 
   const priceLabel = price ? `1 ${symbol} = ${formatUsd(price)}` : "Price unavailable";
-  const canReview = authenticated && numericAmount > 0 && price > 0;
+  const canReview = authenticated && numericAmount > 0 && price > 0 && !hasInsufficientBalance;
   const actionLabel = !authenticated
     ? "Login to trade"
     : loadingQuote
@@ -192,6 +227,10 @@ export function TradePanel({ tokenAddress, tokenSymbol, tokenName, tokenPrice }:
     }
 
     if (!canReview || loadingQuote || isExecuting || !user?.wallet?.address) return;
+    if (user.wallet.address.startsWith("0x")) {
+      setStatus("Please connect a Solana wallet to trade.");
+      return;
+    }
 
     // Define a minimal type for jupQuote to bypass typescript any errors
     interface JupQuoteResponse {
@@ -237,7 +276,7 @@ export function TradePanel({ tokenAddress, tokenSymbol, tokenName, tokenPrice }:
         // Upsert user in Supabase
         const { data: dbUser } = await supabase
           .from("users")
-          .upsert({ wallet_address: user.wallet.address }, { onConflict: "wallet_address" })
+          .upsert({ privy_id: user.id, wallet_address: user.wallet.address }, { onConflict: "privy_id" })
           .select("id")
           .single();
 
@@ -289,47 +328,108 @@ export function TradePanel({ tokenAddress, tokenSymbol, tokenName, tokenPrice }:
   };
 
   return (
-    <form
-      onSubmit={handleSubmit}
-      className="glass-card rounded-[24px] border border-white/5 p-5 shadow-2xl"
-      aria-label={`${symbol} trade form`}
-    >
-      <div className="mb-6 flex gap-2 rounded-2xl bg-black/40 p-1.5">
-        <button
-          type="button"
-          onClick={() => handleModeChange("buy")}
-          aria-pressed={mode === "buy"}
-          className={`flex flex-1 items-center justify-center gap-2 rounded-xl py-3 font-bold transition-all ${
-            mode === "buy"
-              ? "bg-accent-primary text-white shadow-lg"
-              : "text-zinc-400 hover:bg-white/5 hover:text-white"
-          }`}
-        >
-          <TrendingUp className="h-4 w-4" aria-hidden="true" />
-          Buy
-        </button>
-        <button
-          type="button"
-          onClick={() => handleModeChange("sell")}
-          aria-pressed={mode === "sell"}
-          className={`flex flex-1 items-center justify-center gap-2 rounded-xl py-3 font-bold transition-all ${
-            mode === "sell"
-              ? "bg-red-500/80 text-white shadow-lg"
-              : "text-zinc-400 hover:bg-white/5 hover:text-white"
-          }`}
-        >
-          <TrendingDown className="h-4 w-4" aria-hidden="true" />
-          Sell
-        </button>
+    <div className="flex flex-col gap-3 font-sans w-full max-w-[400px] mx-auto">
+      {/* Top Balance Boxes */}
+      <div className="flex justify-end gap-2 mb-1">
+        <div className="relative" ref={depositMenuRef}>
+          <div className="flex flex-col justify-center rounded-xl border border-white/10 bg-[#0a0a0c] px-3 py-1.5 shadow-sm min-w-[110px]">
+            <div className="flex items-baseline gap-1.5">
+              <span className="text-sm font-bold text-white">
+                ${authenticated && mode === "buy" ? (walletBalance ? walletBalance.split(' ')[0] : "0.00") : "0.00"}
+              </span>
+              <span className="text-[11px] font-medium text-zinc-500">cash</span>
+            </div>
+            <button
+              type="button"
+              onClick={() => setIsDepositOpen((prev) => !prev)}
+              className="text-left text-[11px] font-bold text-[#4c5df8] hover:text-[#5f6df9] transition-colors"
+            >
+              Deposit more
+            </button>
+          </div>
+          
+          {isDepositOpen && (
+            <div className="absolute top-full right-0 lg:left-0 lg:right-auto mt-2 w-48 rounded-[14px] border border-white/10 bg-[#0f0f13] shadow-[0_16px_40px_rgba(0,0,0,0.8)] z-50 overflow-hidden">
+              <button
+                type="button"
+                className="w-full flex items-center gap-3 px-4 py-3.5 text-sm font-bold text-white transition-colors hover:bg-white/5"
+                onClick={() => {
+                  setIsDepositOpen(false);
+                  if (user?.wallet?.address) {
+                    fundWallet({ address: user.wallet.address });
+                  }
+                }}
+              >
+                <div className="flex h-5 w-5 items-center justify-center rounded-full bg-white text-black">
+                  <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>
+                </div>
+                Deposit
+              </button>
+              {hasEmbeddedWallet && (
+                <button
+                  type="button"
+                  className="w-full flex items-center gap-3 px-4 py-3.5 text-sm font-bold text-white transition-colors hover:bg-white/5 border-t border-white/5"
+                  onClick={() => {
+                    setIsDepositOpen(false);
+                    exportWallet();
+                  }}
+                >
+                  <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="currentColor" stroke="none" className="text-white"><path d="M2 20h20v2H2zM12 2l10 7H2zm-7 9h2v7H5zm5 0h2v7h-2zm5 0h2v7h-2z"/></svg>
+                  Withdraw
+                </button>
+              )}
+            </div>
+          )}
+        </div>
+        <div className="flex items-center justify-between rounded-xl border border-white/10 bg-[#0a0a0c] px-3 py-1.5 shadow-sm min-w-[110px] gap-3">
+          <div className="flex flex-col justify-center">
+            <span className="text-sm font-bold text-white">
+              {authenticated && mode === "sell" ? (walletBalance ? walletBalance.split(' ')[0] : "0.00") : "$0.00"}
+            </span>
+            <span className="text-[11px] font-medium text-zinc-500">--</span>
+          </div>
+          <div className="flex h-6 w-6 items-center justify-center rounded-full bg-blue-500 text-white shadow-inner">
+            <span className="text-[10px] font-black italic tracking-tighter">S</span>
+          </div>
+        </div>
       </div>
 
-      <div className="space-y-4">
-        <div>
-          <div className="mb-2 flex justify-between text-xs font-bold uppercase tracking-wider opacity-60">
-            <span>Pay</span>
-            <span>{authenticated ? (walletBalance ? `Balance: ${walletBalance}` : "Loading...") : "Login for balance"}</span>
-          </div>
-          <label className="flex rounded-2xl border border-white/5 bg-[#09090b] p-4 transition-colors focus-within:border-accent-primary">
+      {/* Main Trade Card */}
+      <form
+        onSubmit={handleSubmit}
+        className="rounded-[20px] border border-white/5 bg-[#0a0a0c] p-4 shadow-2xl flex flex-col"
+        aria-label={`${symbol} trade form`}
+      >
+        {/* Buy / Sell Toggle */}
+        <div className="mb-4 flex gap-2">
+          <button
+            type="button"
+            onClick={() => handleModeChange("buy")}
+            className={`flex-1 rounded-xl py-3 text-sm font-bold transition-all duration-200 ${
+              mode === "buy"
+                ? "bg-[#112a1f] text-[#22c55e]"
+                : "bg-[#121214] text-zinc-500 hover:bg-white/5 hover:text-white"
+            }`}
+          >
+            Buy
+          </button>
+          <button
+            type="button"
+            onClick={() => handleModeChange("sell")}
+            className={`flex-1 rounded-xl py-3 text-sm font-bold transition-all duration-200 ${
+              mode === "sell"
+                ? "bg-[#2c1313] text-[#ef4444]"
+                : "bg-[#121214] text-zinc-500 hover:bg-white/5 hover:text-white"
+            }`}
+          >
+            Sell
+          </button>
+        </div>
+
+        {/* Amount Input */}
+        <div className="mb-3 flex items-center justify-between rounded-[16px] border border-white/5 bg-[#121214] px-4 py-6 transition-colors focus-within:border-white/20 relative group">
+          <div className="flex items-center w-full">
+            <span className={`text-4xl font-medium transition-colors ${amount ? 'text-white' : 'text-zinc-600'}`}>$</span>
             <input
               value={amount}
               onChange={(event) => {
@@ -337,116 +437,100 @@ export function TradePanel({ tokenAddress, tokenSymbol, tokenName, tokenPrice }:
                 setStatus(null);
               }}
               inputMode="decimal"
-              placeholder="0.0"
-              className="w-full flex-1 bg-transparent text-3xl font-medium outline-none"
-              aria-label={`${sourceSymbol} amount`}
+              placeholder="0"
+              className="ml-1 w-full bg-transparent text-4xl font-medium text-white placeholder-zinc-600 outline-none"
+              aria-label="Trade amount"
             />
-            <span className="flex items-center gap-2 rounded-xl bg-white/5 px-3 py-1.5 font-bold">
-              <BadgeDollarSign className="h-4 w-4 text-accent-primary" aria-hidden="true" />
-              {sourceSymbol}
+          </div>
+          {!amount && (
+            <span className="pointer-events-none absolute right-4 text-sm font-bold text-zinc-600 transition-opacity">
+              Enter amount
             </span>
-          </label>
+          )}
         </div>
 
-        <div className="flex items-center justify-between gap-2">
-          <div className="flex flex-wrap gap-1.5">
-            {QUICK_AMOUNTS.map((value) => (
+        {/* Quick Amounts & Settings */}
+        <div className="mb-4 flex items-center justify-between">
+          <div className="flex gap-2">
+            {QUICK_AMOUNTS.map((val) => (
               <button
-                key={value}
+                key={val}
                 type="button"
                 onClick={() => {
-                  setAmount(value);
+                  setAmount(val);
                   setStatus(null);
                 }}
-                className="rounded-lg border border-white/5 bg-white/[0.04] px-2.5 py-1 text-xs font-bold text-zinc-400 transition-colors hover:bg-white/10 hover:text-white"
+                className="rounded-lg border border-white/5 bg-[#121214] px-3 py-1.5 text-[13px] font-bold text-zinc-300 transition-colors hover:bg-white/10 hover:text-white"
               >
-                {value}
+                ${val}
               </button>
             ))}
           </div>
-
           <button
             type="button"
-            onClick={handleSwapSide}
-            title="Switch buy and sell"
-            aria-label="Switch buy and sell"
-            className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full border border-white/10 bg-[#121124] text-accent-primary shadow-lg transition-transform hover:scale-110"
+            className="flex h-8 w-8 items-center justify-center rounded-lg text-zinc-500 transition-colors hover:bg-white/5 hover:text-white"
+            aria-label="Settings"
           >
-            <ArrowDownUp className="h-5 w-5" aria-hidden="true" />
+            <svg
+              xmlns="http://www.w3.org/2000/svg"
+              width="16"
+              height="16"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="2"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+            >
+              <path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z" />
+              <circle cx="12" cy="12" r="3" />
+            </svg>
           </button>
         </div>
 
-        <div>
-          <div className="mb-2 flex justify-between text-xs font-bold uppercase tracking-wider opacity-60">
-            <span>Receive estimated</span>
-            <span>{priceLabel}</span>
+        {/* Available Balance / Error */}
+        {hasInsufficientBalance ? (
+          <div className="mb-4 text-[13px] font-bold text-[#ff5b3a]">
+            Insufficient cash balance
           </div>
-          <div className="flex rounded-2xl border border-white/5 bg-[#09090b] p-4">
-            <input
-              value={
-                mode === "buy"
-                  ? formatTokenAmount(estimatedReceive)
-                  : estimatedReceive
-                    ? estimatedReceive.toFixed(2)
-                    : "0.0"
-              }
-              readOnly
-              className="w-full flex-1 bg-transparent text-3xl font-medium text-zinc-500 outline-none"
-              aria-label={`${targetSymbol} estimated receive`}
-            />
-            <span className="flex items-center rounded-xl bg-white/5 px-3 py-1.5 font-bold">
-              {targetSymbol}
-            </span>
+        ) : (
+          <div className="mb-4 text-[13px] font-bold text-zinc-400">
+            ${authenticated ? (mode === "buy" ? (walletBalance ? walletBalance.split(' ')[0] : "0") : "0") : "0"} available
           </div>
-        </div>
-
-        <div className="flex items-center justify-between gap-3 rounded-2xl border border-white/5 bg-white/[0.03] px-3 py-2">
-          <div className="flex items-center gap-2 text-xs font-bold uppercase tracking-wider text-zinc-500">
-            <Info className="h-4 w-4" aria-hidden="true" />
-            Slippage
-          </div>
-          <div className="flex gap-1">
-            {SLIPPAGE_OPTIONS.map((value) => (
-              <button
-                key={value}
-                type="button"
-                onClick={() => setSlippage(value)}
-                className={`rounded-lg px-2.5 py-1 text-xs font-bold transition-colors ${
-                  slippage === value
-                    ? "bg-accent-primary text-white"
-                    : "text-zinc-500 hover:bg-white/5 hover:text-white"
-                }`}
-              >
-                {value}%
-              </button>
-            ))}
-          </div>
-        </div>
+        )}
 
         {status && (
-          <div className="flex items-start gap-2 rounded-2xl border border-green-400/20 bg-green-400/10 px-3 py-2 text-sm font-medium text-green-200">
-            <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0" aria-hidden="true" />
+          <div className="mb-3 flex items-start gap-2 rounded-xl border border-white/10 bg-white/5 px-3 py-2 text-[13px] font-medium text-zinc-300">
+            <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0 text-accent-primary" aria-hidden="true" />
             <span>{status}</span>
           </div>
         )}
 
+        {/* Action Button */}
         <button
           type="submit"
           disabled={authenticated && !canReview}
-          className={`mt-2 flex w-full items-center justify-center gap-2 rounded-2xl py-4 text-lg font-black text-white shadow-[0_0_40px_rgba(107,111,245,0.3)] transition-transform ${
+          className={`w-full rounded-xl py-3.5 text-[15px] font-bold text-white transition-all ${
             authenticated && !canReview
-              ? "cursor-not-allowed bg-white/10 text-zinc-500 shadow-none"
-              : "bg-accent-primary hover:scale-[1.02]"
+              ? "cursor-not-allowed bg-[#121214] opacity-50 border border-white/5"
+              : "bg-[#121214] hover:bg-white/10 border border-white/5 hover:border-white/10 shadow-sm"
           }`}
         >
-          <Wallet className="h-5 w-5" aria-hidden="true" />
-          {actionLabel}
+          {actionLabel === "Review buy" || actionLabel === "Review sell" ? `${mode === "buy" ? "Buy" : "Sell"} ${symbol}` : actionLabel}
         </button>
 
-        <div className="break-all px-1 text-center text-[11px] font-medium text-zinc-600" title={tokenName || symbol}>
-          {tokenAddress.slice(0, 8)}...{tokenAddress.slice(-6)}
+        {/* Footer Warning */}
+        <div className="mt-4 flex items-center justify-between rounded-xl border border-white/5 bg-[#121214]/50 px-3 py-2 text-[11px] font-bold text-zinc-400">
+          <div className="flex items-center gap-1.5">
+            <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="currentColor" stroke="none" className="text-zinc-400">
+              <path d="M12 2L1 21h22L12 2zm1 16h-2v-2h2v2zm0-4h-2v-5h2v5z"/>
+            </svg>
+            Unverified token
+          </div>
+          <Info className="h-3.5 w-3.5 text-zinc-500 hover:text-zinc-300 cursor-pointer transition-colors" aria-hidden="true" />
         </div>
-      </div>
-    </form>
+      </form>
+    </div>
   );
 }
+
