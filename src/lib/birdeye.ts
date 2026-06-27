@@ -18,6 +18,8 @@ export interface BirdeyeTokenOverview extends BirdeyeToken {
   v24h: number;
   mc: number;
   supply?: number;
+  circulatingSupply?: number;
+  realCirculatingSupply?: number;
 }
 
 export interface SearchResult {
@@ -168,8 +170,22 @@ export async function getTokenOHLCV(address: string, type: string = "15m"): Prom
 }
 
 export interface BirdeyeTrade {
-  quote: { symbol: string; amount: string; uiAmount: number; address: string };
-  base: { symbol: string; amount: string; uiAmount: number; address: string };
+  quote: {
+    symbol: string;
+    amount: string;
+    uiAmount: number;
+    address: string;
+    price?: number;
+    nearestPrice?: number;
+  };
+  base: {
+    symbol: string;
+    amount: string;
+    uiAmount: number;
+    address: string;
+    price?: number;
+    nearestPrice?: number;
+  };
   basePrice: number;
   quotePrice: number;
   txHash: string;

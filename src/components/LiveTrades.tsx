@@ -8,8 +8,9 @@ import { getTokenTrades } from "@/lib/birdeye";
 interface Trade {
   id: string;
   type: "buy" | "sell";
-  priceUsd: number;
   amount: number;
+  symbol: string;
+  valueUsd: number;
   time: string;
 }
 
@@ -32,15 +33,23 @@ export function LiveTrades({ mint }: { mint: string }) {
       try {
         const data = await getTokenTrades(mint, 15);
         if (data && data.length > 0) {
-          const formatted = data.map((t) => ({
-            id: t.txHash,
-            type: t.side,
-            priceUsd: t.quotePrice,
-            // For a buy/sell on Solana token, amount is usually base uiAmount or quote uiAmount depending on side
-            // We use base.uiAmount if base address matches mint, otherwise quote
-            amount: t.base.address === mint ? t.base.uiAmount : t.quote.uiAmount,
-            time: formatTimeAgo(t.blockUnixTime * 1000)
-          }));
+          const formatted = data.map((trade, index) => {
+            const tokenLeg = trade.base.address === mint ? trade.base : trade.quote;
+            const tokenPrice =
+              tokenLeg.price ||
+              tokenLeg.nearestPrice ||
+              (trade.base.address === mint ? trade.basePrice : trade.quotePrice) ||
+              0;
+
+            return {
+              id: `${trade.txHash}-${index}`,
+              type: trade.side,
+              amount: tokenLeg.uiAmount,
+              symbol: tokenLeg.symbol,
+              valueUsd: tokenLeg.uiAmount * tokenPrice,
+              time: formatTimeAgo(trade.blockUnixTime * 1000),
+            };
+          });
           setTrades(formatted);
         }
         setLoading(false);
@@ -67,6 +76,11 @@ export function LiveTrades({ mint }: { mint: string }) {
         </div>
       ) : (
         <div className="space-y-3">
+          {trades.length === 0 && (
+            <div className="py-6 text-center text-sm font-medium text-zinc-500">
+              No recent swaps were found.
+            </div>
+          )}
           {trades.map((trade) => (
             <div key={trade.id} className="flex justify-between items-center text-sm border-b border-white/5 pb-2 last:border-0 last:pb-0">
               <span className={`font-bold ${trade.type === 'buy' ? 'text-green-400' : 'text-red-400'}`}>
@@ -74,8 +88,16 @@ export function LiveTrades({ mint }: { mint: string }) {
               </span>
               <div className="text-zinc-300 font-mono text-xs">{trade.time}</div>
               <div className="text-right">
-                <div className="font-bold text-white">${(trade.priceUsd * trade.amount).toFixed(2)}</div>
-                <div className="text-xs text-zinc-500">{trade.amount.toLocaleString()} Tokens</div>
+                <div className="font-bold text-white">
+                  {trade.valueUsd.toLocaleString("en-US", {
+                    style: "currency",
+                    currency: "USD",
+                    maximumFractionDigits: 2,
+                  })}
+                </div>
+                <div className="text-xs text-zinc-500">
+                  {trade.amount.toLocaleString("en-US", { maximumFractionDigits: 4 })} {trade.symbol}
+                </div>
               </div>
             </div>
           ))}

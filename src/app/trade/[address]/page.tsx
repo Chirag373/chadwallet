@@ -127,8 +127,7 @@ export default async function TradePage({ params }: { params: Promise<{ address:
           <TradePanel
             tokenAddress={address}
             tokenSymbol={tokenOverview?.symbol}
-            tokenName={tokenOverview?.name}
-            tokenPrice={tokenOverview?.price}
+            tokenDecimals={tokenOverview?.decimals}
           />
           <LiveTrades mint={address} />
           <HoldersList mint={address} />

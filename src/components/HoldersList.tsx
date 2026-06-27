@@ -6,9 +6,10 @@ import { Users } from "lucide-react";
 import { getTokenHolders, getTokenOverview } from "@/lib/birdeye";
 
 interface Holder {
+  id: string;
   owner: string;
   amount: number;
-  percentage: number;
+  percentage: number | null;
 }
 
 function shortenAddress(addr: string) {
@@ -29,12 +30,17 @@ export function HoldersList({ mint }: { mint: string }) {
         ]);
 
         if (holdersData && holdersData.length > 0) {
-          const totalSupply = overview?.supply || 1; // Avoid div by 0
+          const totalSupply =
+            overview?.circulatingSupply ||
+            overview?.realCirculatingSupply ||
+            overview?.supply ||
+            0;
 
           const formatted = holdersData.map((h) => ({
+            id: h.token_account,
             owner: shortenAddress(h.owner),
             amount: h.ui_amount,
-            percentage: (h.ui_amount / totalSupply) * 100,
+            percentage: totalSupply > 0 ? (h.ui_amount / totalSupply) * 100 : null,
           }));
           setHolders(formatted);
         }
@@ -60,11 +66,18 @@ export function HoldersList({ mint }: { mint: string }) {
         </div>
       ) : (
         <div className="space-y-3">
+          {holders.length === 0 && (
+            <div className="py-6 text-center text-sm font-medium text-zinc-500">
+              Holder data is unavailable for this token.
+            </div>
+          )}
           {holders.map((holder, i) => (
-            <div key={i} className="flex justify-between items-center text-sm border-b border-white/5 pb-2 last:border-0 last:pb-0">
+            <div key={holder.id || `${holder.owner}-${i}`} className="flex justify-between items-center text-sm border-b border-white/5 pb-2 last:border-0 last:pb-0">
               <span className="font-mono text-zinc-300">{holder.owner}</span>
               <div className="text-right">
-                <div className="font-bold text-white">{holder.percentage.toFixed(2)}%</div>
+                <div className="font-bold text-white">
+                  {holder.percentage === null ? "--" : `${holder.percentage.toFixed(2)}%`}
+                </div>
                 <div className="text-xs text-zinc-500">{holder.amount.toLocaleString()}</div>
               </div>
             </div>

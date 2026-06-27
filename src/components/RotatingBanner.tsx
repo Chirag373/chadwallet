@@ -11,6 +11,13 @@ interface TokenData {
   mint: string;
 }
 
+interface TrendingToken {
+  address: string;
+  symbol: string;
+  price?: number;
+  price24hChangePercent?: number;
+}
+
 const FALLBACK_TOKENS: TokenData[] = [
   { symbol: "SOL",    price: "$148.30", change: "+4.2%",  up: true,  mint: "So11111111111111111111111111111111111111112" },
   { symbol: "BONK",   price: "$0.000021", change: "+11.8%", up: true,  mint: "DezXAZ8z7PnrnRJjz3wXBoRgixCa6xjnB7YaB1pPB263" },
@@ -39,7 +46,7 @@ function TokenPill({ token, onClick }: { token: TokenData; onClick: () => void }
         className="w-5 h-5 rounded-full flex items-center justify-center text-[9px] font-bold shrink-0"
         style={{ background: token.up ? "rgba(52,211,153,0.15)" : "rgba(239,68,68,0.15)", color: token.up ? "#34d399" : "#f87171" }}
       >
-        {token.symbol.slice(0, 1)}
+        {Array.from(token.symbol)[0] || "?"}
       </div>
       <span className="text-xs font-bold" style={{ color: "var(--text-primary)" }}>{token.symbol}</span>
       <span className="text-xs" style={{ color: "var(--text-secondary)" }}>{token.price}</span>
@@ -55,29 +62,22 @@ export function RotatingBanner({ direction = "left" }: { direction?: "left" | "r
   useEffect(() => {
     async function fetchTrending() {
       try {
-        const apiKey = process.env.NEXT_PUBLIC_BIRDEYE_API_KEY;
-        if (!apiKey) return;
-        
-        // Fetch trending tokens (Solana only)
-        const res = await fetch("https://public-api.birdeye.so/defi/tokenlist?sort_by=v24hUSD&sort_type=desc&offset=0&limit=15&min_liquidity=100000", {
-          headers: {
-            "x-chain": "solana",
-            "X-API-KEY": apiKey,
-          }
-        });
+        const res = await fetch("/api/trending", { cache: "no-store" });
         if (!res.ok) return;
-        const data = await res.json();
-        if (data?.data?.tokens) {
-          const formatted = data.data.tokens.map((t: Record<string, unknown>) => {
-            const price = Number(t.v24hUSD) || 0;
-            const priceStr = price > 1 ? `$${price.toFixed(2)}` : `$${price.toPrecision(3)}`;
-            const changeNum = Number(t.v24hChangePercent) || 0;
+        const data = (await res.json()) as { tokens?: TrendingToken[] };
+        if (data.tokens) {
+          const formatted = data.tokens.map((token) => {
+            const price = Number(token.price) || 0;
+            const priceStr = price >= 1
+              ? `$${price.toLocaleString("en-US", { maximumFractionDigits: 2 })}`
+              : `$${price.toLocaleString("en-US", { maximumSignificantDigits: 4 })}`;
+            const changeNum = Number(token.price24hChangePercent) || 0;
             return {
-              symbol: (t.symbol as string) || "UNKNOWN",
+              symbol: token.symbol || "UNKNOWN",
               price: priceStr,
               change: `${changeNum > 0 ? "+" : ""}${changeNum.toFixed(1)}%`,
               up: changeNum >= 0,
-              mint: (t.address as string) || ""
+              mint: token.address,
             };
           });
           if (formatted.length > 5) {
@@ -108,10 +108,9 @@ export function RotatingBanner({ direction = "left" }: { direction?: "left" | "r
         }}
       >
         {doubled.map((token, i) => (
-          <TokenPill key={i} token={token} onClick={() => router.push(`/trade/${token.mint}`)} />
+          <TokenPill key={`${token.mint}-${i}`} token={token} onClick={() => router.push(`/trade/${token.mint}`)} />
         ))}
       </div>
     </div>
   );
 }
-

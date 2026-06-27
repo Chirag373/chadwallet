@@ -4,7 +4,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import Image from "next/image";
 import { usePrivy } from "@privy-io/react-auth";
-import { ChevronDown, LayoutDashboard, LogOut, Settings, UserRound } from "lucide-react";
+import { ChevronDown, LayoutDashboard, LogOut, UserRound } from "lucide-react";
 
 import { TokenSearch } from "./TokenSearch";
 
@@ -77,7 +77,14 @@ export function Navbar() {
             className="btn-ghost flex items-center gap-2"
             style={{ padding: "8px 16px", borderRadius: "10px", fontSize: "0.8125rem" }}
           >
-            <Image src="https://upload.wikimedia.org/wikipedia/commons/3/31/Apple_logo_white.svg" alt="Apple" width={16} height={16} className="object-contain" unoptimized />
+            <Image
+              src="https://upload.wikimedia.org/wikipedia/commons/3/31/Apple_logo_white.svg"
+              alt="Apple"
+              width={16}
+              height={16}
+              style={{ width: "16px", height: "16px" }}
+              unoptimized
+            />
             App Store
           </Link>
           <Link
@@ -86,7 +93,14 @@ export function Navbar() {
             className="btn-ghost flex items-center gap-2"
             style={{ padding: "8px 16px", borderRadius: "10px", fontSize: "0.8125rem" }}
           >
-            <Image src="https://upload.wikimedia.org/wikipedia/commons/d/d0/Google_Play_Arrow_logo.svg" alt="Google Play" width={16} height={16} className="object-contain" unoptimized />
+            <Image
+              src="https://upload.wikimedia.org/wikipedia/commons/d/d0/Google_Play_Arrow_logo.svg"
+              alt="Google Play"
+              width={16}
+              height={16}
+              style={{ width: "16px", height: "16px" }}
+              unoptimized
+            />
             Google Play
           </Link>
         </div>
@@ -117,22 +131,13 @@ export function Navbar() {
                 className="absolute right-0 top-full mt-2 w-52 overflow-hidden rounded-2xl border border-white/10 bg-[#15141f] shadow-[0_24px_60px_rgba(0,0,0,0.55)]"
               >
                 <Link
-                  href="/trade/So11111111111111111111111111111111111111112"
+                  href="/dashboard"
                   role="menuitem"
                   onClick={() => setIsAccountOpen(false)}
                   className="flex items-center gap-3 px-4 py-3 text-sm font-bold text-white transition-colors hover:bg-white/[0.07]"
                 >
                   <LayoutDashboard className="w-4 h-4 text-accent-primary" aria-hidden="true" />
                   Dashboard
-                </Link>
-                <Link
-                  href="/dashboard"
-                  role="menuitem"
-                  onClick={() => setIsAccountOpen(false)}
-                  className="flex items-center gap-3 px-4 py-3 text-sm font-bold text-white transition-colors hover:bg-white/[0.07]"
-                >
-                  <Settings className="w-4 h-4 text-accent-primary" aria-hidden="true" />
-                  Manage Account
                 </Link>
                 <button
                   type="button"

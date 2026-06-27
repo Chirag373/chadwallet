@@ -14,7 +14,7 @@
 }
 
 @theme inline {
-  --font-sans: "Inter", system-ui, sans-serif;
+  --font-sans: "SF Pro Display", "Segoe UI", system-ui, sans-serif;
 }
 
 * {
@@ -28,7 +28,7 @@ html {
 body {
   background: var(--bg-primary);
   color: var(--text-primary);
-  font-family: "Inter", system-ui, sans-serif;
+  font-family: "SF Pro Display", "Segoe UI", system-ui, sans-serif;
   -webkit-font-smoothing: antialiased;
   overflow-x: hidden;
 }
